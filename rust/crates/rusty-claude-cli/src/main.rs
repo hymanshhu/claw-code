@@ -291,6 +291,26 @@ fn format_model_switch_report(previous: &str, next: &str, message_count: usize) 
     )
 }
 
+fn format_permissions_report(mode: &str) -> String {
+    format!(
+        "Permissions
+  Current mode     {mode}
+
+Available modes
+  read-only        Allow read/search tools only
+  workspace-write  Allow editing within the workspace
+  danger-full-access Allow unrestricted tool access"
+    )
+}
+
+fn format_permissions_switch_report(previous: &str, next: &str) -> String {
+    format!(
+        "Permissions updated
+  Previous         {previous}
+  Current          {next}"
+    )
+}
+
 fn run_resume_command(
     session_path: &Path,
     session: &Session,
@@ -548,7 +568,7 @@ impl LiveCli {
 
     fn set_permissions(&mut self, mode: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let Some(mode) = mode else {
-            println!("Current permission mode: {}", permission_mode_label());
+            println!("{}", format_permissions_report(permission_mode_label()));
             return Ok(());
         };
 
@@ -559,10 +579,11 @@ impl LiveCli {
         })?;
 
         if normalized == permission_mode_label() {
-            println!("Permission mode already set to {normalized}.");
+            println!("{}", format_permissions_report(normalized));
             return Ok(());
         }
 
+        let previous = permission_mode_label().to_string();
         let session = self.runtime.session().clone();
         self.runtime = build_runtime_with_permission_mode(
             session,
@@ -571,7 +592,10 @@ impl LiveCli {
             true,
             normalized,
         )?;
-        println!("Switched permission mode to {normalized}.");
+        println!(
+            "{}",
+            format_permissions_switch_report(&previous, normalized)
+        );
         Ok(())
     }
 
@@ -1234,10 +1258,10 @@ fn print_help() {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_model_report, format_model_switch_report, format_status_report,
-        normalize_permission_mode, parse_args, render_init_claude_md, render_repl_help,
-        resume_supported_slash_commands, status_context, CliAction, SlashCommand, StatusUsage,
-        DEFAULT_MODEL,
+        format_model_report, format_model_switch_report, format_permissions_report,
+        format_permissions_switch_report, format_status_report, normalize_permission_mode,
+        parse_args, render_init_claude_md, render_repl_help, resume_supported_slash_commands,
+        status_context, CliAction, SlashCommand, StatusUsage, DEFAULT_MODEL,
     };
     use runtime::{ContentBlock, ConversationMessage, MessageRole};
     use std::path::{Path, PathBuf};
@@ -1350,6 +1374,23 @@ mod tests {
             names,
             vec!["help", "status", "compact", "clear", "cost", "config", "memory", "init",]
         );
+    }
+
+    #[test]
+    fn permissions_report_uses_sectioned_layout() {
+        let report = format_permissions_report("workspace-write");
+        assert!(report.contains("Permissions"));
+        assert!(report.contains("Current mode     workspace-write"));
+        assert!(report.contains("Available modes"));
+        assert!(report.contains("danger-full-access"));
+    }
+
+    #[test]
+    fn permissions_switch_report_is_structured() {
+        let report = format_permissions_switch_report("read-only", "workspace-write");
+        assert!(report.contains("Permissions updated"));
+        assert!(report.contains("Previous         read-only"));
+        assert!(report.contains("Current          workspace-write"));
     }
 
     #[test]
